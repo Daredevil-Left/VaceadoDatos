@@ -306,6 +306,7 @@
         function SurveyEditor({ variablesConfig, dimensionsMap, respondentsData, setRespondentsData, summaryData, summaryMode, setSummaryMode, onBackToConfig }) {
             const fileInputRef = useRef(null);
             const [showResetModal, setShowResetModal] = useState(false);
+            const [showHelpModal, setShowHelpModal] = useState(false);
             const [respondentsToAdd, setRespondentsToAdd] = useState(1);
 
             const handleAddRespondents = () => {
@@ -365,54 +366,26 @@
             };
             
             const handleDownloadExcel = () => {
-                const columnKeys = dimensionsMap.flatMap(dim => {
-                    return Array.from({length: dim.questions}, (_, i) => `d${dim.id}_p${dim.questionStartIndex + i}`);
-                });
+                const varHeaders = variablesConfig.map(v => `Variable ${v.id}`);
+                const dimHeaders = dimensionsMap.map(d => `Dimensión ${d.id}`);
+                const headers = ['Encuestado #', ...varHeaders, ...dimHeaders];
 
-                const dataForSheet = respondentsData.map((respondent, index) => {
+                const dataForSheet = summaryData.map((summary, index) => {
                     const row = { 'Encuestado #': index + 1 };
-                    columnKeys.forEach(key => {
-                        row[key] = respondent[key] !== undefined ? respondent[key] : '';
+                    variablesConfig.forEach(variable => {
+                        row[`Variable ${variable.id}`] = summary.variables[`var_${variable.id}`] ?? 'N/A';
+                    });
+                    dimensionsMap.forEach(dim => {
+                        row[`Dimensión ${dim.id}`] = summary.dimensions[`dim_${dim.id}`] ?? 'N/A';
                     });
                     return row;
                 });
 
-                const ws = XLSX.utils.json_to_sheet(dataForSheet, { header: ['Encuestado #', ...columnKeys] });
-
-                const merges = [];
-                let colOffset = 1;
-                variablesConfig.forEach(v => {
-                    const questionsInVar = v.dimensions.reduce((acc, dim) => acc + dim.questions, 0);
-                    if (questionsInVar > 1) merges.push({ s: { r: 0, c: colOffset }, e: { r: 0, c: colOffset + questionsInVar - 1 } });
-                    colOffset += questionsInVar;
-                });
-                colOffset = 1;
-                dimensionsMap.forEach(dim => {
-                     if (dim.questions > 1) merges.push({ s: { r: 1, c: colOffset }, e: { r: 1, c: colOffset + dim.questions - 1 } });
-                    colOffset += dim.questions;
-                });
-                ws['!merges'] = merges;
-                
-                let colOffsetVar = 1;
-                const varHeader = [null];
-                variablesConfig.forEach(v => {
-                    const questionsInVar = v.dimensions.reduce((acc, dim) => acc + dim.questions, 0);
-                    varHeader.push(`Variable ${v.id}`);
-                    if (questionsInVar > 1) varHeader.push(...Array(questionsInVar - 1).fill(null));
-                });
-                
-                const dimHeader = [null];
-                dimensionsMap.forEach(dim => {
-                    dimHeader.push(`Dimensión ${dim.id}`);
-                    if (dim.questions > 1) dimHeader.push(...Array(dim.questions - 1).fill(null));
-                });
-
-                const headerRows = [varHeader, dimHeader];
-                XLSX.utils.sheet_add_aoa(ws, headerRows, { origin: 'A1' });
+                const ws = XLSX.utils.json_to_sheet(dataForSheet, { header: headers });
                 
                 const wb = XLSX.utils.book_new();
-                XLSX.utils.book_append_sheet(wb, ws, "Datos de Encuesta");
-                XLSX.writeFile(wb, "datos_encuesta.xlsx");
+                XLSX.utils.book_append_sheet(wb, ws, "Resumen de Encuesta");
+                XLSX.writeFile(wb, "resumen_encuesta.xlsx");
             };
 
             return (
@@ -425,6 +398,22 @@
                                 <div className="flex justify-center gap-4">
                                     <button onClick={() => setShowResetModal(false)} className="py-2 px-4 bg-gray-200 hover:bg-gray-300 rounded-lg">Cancelar</button>
                                     <button onClick={() => { onBackToConfig(); setShowResetModal(false); }} className="py-2 px-4 bg-red-600 hover:bg-red-700 text-white rounded-lg">Sí, reiniciar</button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                    {showHelpModal && (
+                        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                            <div className="bg-white p-8 rounded-lg shadow-xl max-w-2xl w-full">
+                                <h2 className="text-2xl font-bold mb-4">¿Cómo usar la herramienta?</h2>
+                                <div className="space-y-4 text-gray-700">
+                                    <p><strong>Subir Excel:</strong> Al hacer clic en "Subir Excel", puedes cargar un archivo .xlsx. Asegúrate de que el archivo contenga solo los datos numéricos de las respuestas, sin encabezados ni títulos. La herramienta leerá los datos y los cargará en la tabla.</p>
+                                    <p><strong>Descargar:</strong> El botón "Descargar" exportará la tabla de resumen (promedios o sumas) a un nuevo archivo de Excel llamado <code>resumen_encuesta.xlsx</code>.</p>
+                                    <p><strong>Reiniciar:</strong> Esta opción limpiará todos los datos y te devolverá a la pantalla de configuración inicial.</p>
+                                    <p><strong>Agregar Encuestados:</strong> Puedes añadir más filas para nuevos encuestados usando el botón "Agregar Encuestado(s)".</p>
+                                </div>
+                                <div className="text-right mt-6">
+                                    <button onClick={() => setShowHelpModal(false)} className="py-2 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-lg">Entendido</button>
                                 </div>
                             </div>
                         </div>
@@ -444,6 +433,9 @@
                             <input type="file" ref={fileInputRef} onChange={handleFileUpload} accept=".xlsx, .csv" style={{ display: 'none' }} />
                             <button onClick={handleDownloadExcel} className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded-lg transition-all">
                                 Descargar
+                            </button>
+                             <button onClick={() => setShowHelpModal(true)} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg transition-all">
+                                Ayuda
                             </button>
                              <button onClick={() => setShowResetModal(true)} className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white font-semibold py-2 px-4 rounded-lg transition-all">
                                 Reiniciar

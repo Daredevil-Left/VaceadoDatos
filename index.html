@@ -343,26 +343,49 @@
                         const worksheet = workbook.Sheets[sheetName];
                         const json = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
                         
-                        if (json.length < 3) throw new Error("Formato de archivo inválido.");
-                        
-                        const headerKeys = json[2];
-                        const parsedData = json.slice(3).map((row, index) => {
+                        if (json.length === 0) {
+                            alert("El archivo de Excel está vacío.");
+                            return;
+                        }
+
+                        const expectedHeaderKeys = dimensionsMap.flatMap(dim =>
+                            Array.from({ length: dim.questions }, (_, i) => {
+                                const questionNumber = dim.questionStartIndex + i;
+                                return `d${dim.id}_p${questionNumber}`;
+                            })
+                        );
+
+                        const parsedData = json.map((row, index) => {
                             const respondent = { id: index + 1 };
-                            headerKeys.forEach((key, i) => {
-                                if (key && String(key).startsWith('d')) {
-                                   respondent[key] = (row[i] !== null && row[i] !== undefined) ? Number(row[i]) : '';
+
+                            if (row.length > expectedHeaderKeys.length) {
+                                console.warn(`Advertencia: La fila ${index + 1} tiene ${row.length} columnas, pero se esperaban ${expectedHeaderKeys.length}. Se ignorarán las columnas sobrantes.`);
+                            } else if (row.length < expectedHeaderKeys.length) {
+                                console.warn(`Advertencia: La fila ${index + 1} tiene ${row.length} columnas, pero se esperaban ${expectedHeaderKeys.length}. Las columnas faltantes quedarán vacías.`);
+                            }
+
+                            expectedHeaderKeys.forEach((key, i) => {
+                                const cellValue = row[i];
+                                if (cellValue !== null && cellValue !== undefined && cellValue !== '') {
+                                    const numericValue = Number(cellValue);
+                                    respondent[key] = isNaN(numericValue) ? '' : numericValue;
+                                } else {
+                                    respondent[key] = '';
                                 }
                             });
                             return respondent;
                         });
 
                         setRespondentsData(parsedData);
+                        alert(`Se cargaron ${parsedData.length} encuestados exitosamente.`);
                     } catch (error) {
                         console.error("Error al procesar el archivo:", error);
+                        alert(`Error al procesar el archivo: ${error.message}. Asegúrate de que es un archivo Excel válido y que la configuración de la encuesta coincide con los datos.`);
+                    } finally {
+                        event.target.value = null;
                     }
                 };
                 reader.readAsArrayBuffer(file);
-                event.target.value = null; 
             };
             
             const handleDownloadExcel = () => {

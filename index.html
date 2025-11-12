@@ -396,10 +396,20 @@
                 const dataForSheet = summaryData.map((summary, index) => {
                     const row = { 'Encuestado #': index + 1 };
                     variablesConfig.forEach(variable => {
-                        row[`Variable ${variable.id}`] = summary.variables[`var_${variable.id}`] ?? 'N/A';
+                        const value = summary.variables[`var_${variable.id}`];
+                        if (value !== 'N/A' && value != null) {
+                            row[`Variable ${variable.id}`] = Math.round(parseFloat(value));
+                        } else {
+                            row[`Variable ${variable.id}`] = 'N/A';
+                        }
                     });
                     dimensionsMap.forEach(dim => {
-                        row[`Dimensión ${dim.id}`] = summary.dimensions[`dim_${dim.id}`] ?? 'N/A';
+                        const value = summary.dimensions[`dim_${dim.id}`];
+                        if (value !== 'N/A' && value != null) {
+                            row[`Dimensión ${dim.id}`] = Math.round(parseFloat(value));
+                        } else {
+                            row[`Dimensión ${dim.id}`] = 'N/A';
+                        }
                     });
                     return row;
                 });
